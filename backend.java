@@ -1,10 +1,15 @@
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.AlgorithmParameters;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.KeySpec;
@@ -63,75 +68,93 @@ public class backend {
         return user + "_" + password + "_";
     }
 
-    public static String encryptor(String toEncrypt, String password) {
+    public static byte[] AESer(String input, String password, int choice) {
         String salt = "guisreallyreallydosuck"; 
         try{
-            byte[] iv = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'};
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
-            
-            SecretKeyFactory sFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec specifications = new PBEKeySpec(password.toCharArray(), salt.getBytes(), 65536, 256);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt.getBytes(), 65536, 256);
+            SecretKey tmp = factory.generateSecret(spec);
+            SecretKey keySpec = new SecretKeySpec(tmp.getEncoded(), "AES");
 
-            SecretKey middleMan = sFactory.generateSecret(specifications);
-            SecretKeySpec secretKey = new SecretKeySpec(middleMan.getEncoded(), "AES");
-            
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
+            AlgorithmParameters params = cipher.getParameters();
+            byte[] iv = params.getParameterSpec(IvParameterSpec.class).getIV();
 
-            return Base64.getEncoder().encodeToString(cipher.doFinal(toEncrypt.getBytes("UTF-8")));
-        } catch (Exception e) {
-            System.out.println(e);
-        } return null;
-    }
+            byte[] output;
 
-    public static String decryptor (String toDecrypt, String password) {
-        String salt = "guisreallyreallydosuck"; 
-        try {
-            byte[] iv = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'};
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
-            
-            SecretKeyFactory sFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec specifications = new PBEKeySpec(password.toCharArray(), salt.getBytes(), 65536, 256);
-
-            SecretKey middleMan = sFactory.generateSecret(specifications);
-            SecretKeySpec secretKey = new SecretKeySpec(middleMan.getEncoded(), "AES");
-            
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
-
-            return new String(cipher.doFinal(Base64.getDecoder().decode(toDecrypt)));
-        } catch (Exception e) {
-            System.out.println(e);
-        } return null;
-    }
-
-
- 
-    public static StringBuilder runNmap(String commands){
-        StringBuilder sb = new StringBuilder("Danmap v1.0\n");
-        try {
-            Process executor = Runtime.getRuntime().exec("nmap" + commands);
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(executor.getInputStream()));
-            String singleLine;
-            while ((singleLine = reader.readLine()) != null) {
-                System.out.println(singleLine);
-                sb.append(singleLine);
+            if (choice == 0){
+                cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+                output = cipher.doFinal(input.getBytes());
+                String str = new String(output, StandardCharsets.UTF_8);
+                System.out.print(str);
+            } else {
+                cipher.init(Cipher.DECRYPT_MODE, keySpec, new IvParameterSpec(iv));
+                output = cipher.doFinal(input.getBytes());
             }
-            reader.close();
-            return sb;
+
+            return output;
         } catch (Exception e) {
-            sb.append(e);
-            return sb;
+            System.out.println(e);
+            return e.getMessage().getBytes();
         }
     }
 
-    public static boolean saveScanToFile(String user, String encryptedData){
+    public static byte[] AESer(byte[] input, String password, int choice) {
+        String salt = "guisreallyreallydosuck"; 
+        try{
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt.getBytes(), 65536, 256);
+            SecretKey tmp = factory.generateSecret(spec);
+            SecretKey keySpec = new SecretKeySpec(tmp.getEncoded(), "AES");
+
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            AlgorithmParameters params = cipher.getParameters();
+            byte[] iv = params.getParameterSpec(IvParameterSpec.class).getIV();
+
+            byte[] output;
+
+            if (choice == 0){
+                cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+                output = cipher.doFinal(input);
+            } else {
+                cipher.init(Cipher.DECRYPT_MODE, keySpec, new IvParameterSpec(iv));
+                output = cipher.doFinal(input);
+            }
+            return output;
+        } catch (Exception e) {
+            System.out.println(e);
+            return e.getMessage().getBytes();
+        }
+    }
+
+    public static byte[] runNmap(String commands){
+        try {
+            Process executor = Runtime.getRuntime().exec("nmap " + commands);
+            InputStream in = executor.getInputStream();
+            byte[] byteBuffer = new byte[8000];
+            int bytesRead = 0;
+
+            ByteArrayOutputStream bufferPrime = new ByteArrayOutputStream();
+
+            while((bytesRead = in.read(byteBuffer)) != -1) {
+                bufferPrime.write(byteBuffer, 0, bytesRead);
+            }
+
+            byte[] data = bufferPrime.toByteArray();
+
+            return data;
+
+        } catch (Exception e) {
+            return new byte[]{'e', 'r', 'r', 'o','r'};
+        }
+    }
+
+    public static boolean saveScanToFile(String user, byte[] encryptedData){
         try {
             String timeStamp = new SimpleDateFormat("yyyyMMddHHmm'.txt'").format(new Date());
             File toSave = new File("data/" + user + "/" + timeStamp);
             if(toSave.createNewFile()){
-                FileWriter writer = new FileWriter(toSave);
+                OutputStream writer = new FileOutputStream(toSave); 
                 writer.write(encryptedData);
                 writer.close();
                 return true;
@@ -156,10 +179,41 @@ public class backend {
         }
     }
 
-    public static HashMap<String, String> makeReadable(StringBuilder dumpedText){
-        HashMap<String, String> internals = new HashMap<String, String>();
-        
+    public static String makeReadable(String dumpedText){
+        String internals = "Welcome to the easy to read output section! \n\n";
+        String[] eachLine = dumpedText.split("\n");
+        if(dumpedText.contains("/tcp") || dumpedText.contains("/udp")) {
+            internals += "Open Ports (An open port can be connected to freely without issue): \n";
+            for(int i = 0; i < eachLine.length; i++){
+                if(eachLine[i].contains("open")){
+                    internals += eachLine[i] + "\n";
+                }
+            }
+            internals += "\n Filtered Ports (A filtered port is blocked by a software/hardware firewall and/or filter):\n ";
+            for(int i = 0; i < eachLine.length; i++){
+                if(eachLine[i].contains("filtered")){
+                    internals += eachLine[i] + "\n";
+                }
+            }
+            internals += "\n";
+            for(int i = 0; i < eachLine.length; i++){
+                if(eachLine[i].contains("closed")){
+                    internals += eachLine[i] + "\n";
+                }
+            }
+        } else {
+            internals += "\n Not enough info to provide a broken down output section. \n";
+        }
         return internals;
     }
 
+    public static boolean isAdminGroup(String user){
+        String[] database = {"user1", "tester"};
+        for(int i = 0; i < database.length; i++){
+            if (database[i].compareTo(user) == 0){
+                return true;
+            }
+        }
+        return false;
+    }
 }
